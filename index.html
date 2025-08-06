@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <?!= include('stylesheet'); ?>
+  </head>
+  <body>
+    <div class="login-container">
+      <div class="login-box">
+        <h1 class="login-title">シフト管理システム</h1>
+        <p class="login-subtitle">ログインしてください</p>
+        <div id="error-message" class="error-message"></div>
+        <div class="input-group">
+          <label for="userId">ユーザーID</label>
+          <input type="text" id="userId" name="userId" required>
+        </div>
+        <div class="input-group">
+          <label for="password">パスワード</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        <button id="loginButton" class="login-button">ログイン</button>
+        <div id="loading" class="loading-spinner" style="display: none;"></div>
+      </div>
+    </div>
+    <?!= include('javascript'); ?>
+  </body>
+</html>

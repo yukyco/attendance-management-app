@@ -1,27 +1,41 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <?!= include('stylesheet'); ?>
-  </head>
-  <body>
-    <div class="login-container">
-      <div class="login-box">
-        <h1 class="login-title">シフト管理システム</h1>
-        <p class="login-subtitle">ログインしてください</p>
-        <div id="error-message" class="error-message"></div>
-        <div class="input-group">
-          <label for="userId">ユーザーID</label>
-          <input type="text" id="userId" name="userId" required>
-        </div>
-        <div class="input-group">
-          <label for="password">パスワード</label>
-          <input type="password" id="password" name="password" required>
-        </div>
-        <button id="loginButton" class="login-button">ログイン</button>
-        <div id="loading" class="loading-spinner" style="display: none;"></div>
-      </div>
-    </div>
-    <?!= include('javascript'); ?>
-  </body>
-</html>
+<form id="shift-form">
+  <label for="date">申請日:</label>
+  <input type="date" id="date" name="date" required>
+  <br>
+  <label for="name">申請者名:</label>
+  <input type="text" id="name" name="name" required>
+  <br>
+  <button type="submit">シフトを申請</button>
+</form>
+
+<script>
+document.getElementById('shift-form').addEventListener('submit', function(event) {
+  event.preventDefault();
+
+  const url = 'https://script.google.com/macros/s/AKfycbwglRz9u44v7xP41bXc6zv6GIOtcwxbN8GVSRJB8RKHpus6anHFAM-TCC5KtXX1DmAtyg/exec';
+  
+  const date = document.getElementById('date').value;
+  const name = document.getElementById('name').value;
+  
+  const data = {
+    date: date,
+    name: name
+  };
+
+  fetch(url, {
+    method: 'POST',
+    body: JSON.stringify(data),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then(response => response.json())
+  .then(result => {
+    alert(result);
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('申請中にエラーが発生しました。');
+  });
+});
+</script>

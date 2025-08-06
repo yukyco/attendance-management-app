@@ -203,12 +203,13 @@
             <!-- スクリーンショットがない場合のプレースホルダー -->
             <div class="screenshot-placeholder" id="screenshotPlaceholder">
                 <div>
-                    <img src="img/ui-webapp.jpg" alt="GASアプリのスクリーンショット" class="screenshot-image" style="display: none;" id="screenshotImage">
+                    📱 GASアプリのスクリーンショットをここに配置
                 </div>
             </div>
             
-            <!-- 実際のスクリーンショット画像を使用する場合は以下のコメントを外してsrcを設定 -->
+            <!-- 実際のスクリーンショット画像 -->
             <img src="ui-webapp.jpg" alt="GASアプリのスクリーンショット" class="screenshot-image" style="display: none;" id="screenshotImage">
+            
             <div class="play-overlay">
                 <div class="play-icon"></div>
             </div>
@@ -219,21 +220,26 @@
         <div class="instructions">
             <h3>📝 設定方法</h3>
             <p><strong>1. GAS アプリの URL を入力:</strong></p>
-            <input type="url" id="gasUrl" class="url-input" placeholder="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec" value="">
+            <input type="url" id="gasUrl" class="url-input" placeholder="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec" value="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec">
             <button class="update-button" onclick="updateURL()">URL更新</button>
+            
+            <p><strong>2. スクリーンショットを追加する場合:</strong></p>
+            <p>• GASアプリのスクリーンショットを撮影<br>
+            • 画像ファイル（screenshot.png等）をNetlifyにアップロード<br>
+            • 上記HTMLコードの画像パスを更新</p>
         </div>
     </div>
 
     <script>
-        // デフォルトのGAS URL（あとで変更してください）
+        // デフォルトのGAS URL
         let gasAppUrl = "https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec";
 
         function openGASApp() {
-            if (gasAppUrl && gasAppUrl !== "https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec") {
+            if (gasAppUrl) {
                 // 新しいタブでGASアプリを開く
                 window.open(gasAppUrl, '_blank');
             } else {
-                alert('まずGASアプリのURLを設定してください！');
+                alert('GASアプリのURLが設定されていません！');
             }
         }
 
@@ -260,6 +266,11 @@
                 placeholder.style.display = 'none';
             }
         }
+
+        // ページ読み込み時にスクリーンショットを表示
+        window.addEventListener('load', function() {
+            showScreenshot('ui-webapp.jpg');
+        });
 
         // 使用例: showScreenshot('path/to/your/screenshot.png');
     </script>

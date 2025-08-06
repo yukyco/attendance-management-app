@@ -1,0 +1,1215 @@
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  
+  // ログインページの処理
+  const loginButton = document.getElementById('loginButton');
+  if (loginButton) {
+    loginButton.addEventListener('click', handleLogin);
+  }
+  
+  // メインページの処理
+  const logoutButton = document.getElementById('logoutButton');
+  if (logoutButton) {
+    initializeMainPage();
+  }
+});
+
+// ログイン処理
+function handleLogin() {
+  const userId = document.getElementById('userId').value;
+  const password = document.getElementById('password').value;
+  const errorMessage = document.getElementById('error-message');
+  const loadingSpinner = document.getElementById('loading');
+  const loginButton = document.getElementById('loginButton');
+
+  if (!userId || !password) {
+    showError('ユーザーIDとパスワードを入力してください。');
+    return;
+  }
+
+  // ローディング表示
+  loadingSpinner.style.display = 'block';
+  loginButton.disabled = true;
+  errorMessage.style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (response.success) {
+        // ログイン成功時、ページをリロードしてdoGetを再実行させる
+        window.location.reload();
+      } else {
+        showError(response.message);
+        // ローディング非表示
+        loadingSpinner.style.display = 'none';
+        loginButton.disabled = false;
+      }
+    })
+    .withFailureHandler(function(error) {
+      showError('サーバーとの通信に失敗しました: ' + error.message);
+      // ローディング非表示
+      loadingSpinner.style.display = 'none';
+      loginButton.disabled = false;
+    })
+    .login(userId, password);
+}
+
+function showError(message) {
+  const errorMessage = document.getElementById('error-message');
+  errorMessage.textContent = message;
+  errorMessage.style.display = 'block';
+}
+
+
+// メインページの初期化
+function initializeMainPage() {
+  // ログインユーザー情報を取得してUIを更新
+  google.script.run.withSuccessHandler(updateUIWithUserData).getLoggedInUser();
+
+  // イベントリスナーを設定
+  document.getElementById('logoutButton').addEventListener('click', handleLogout);
+  document.getElementById('menu-toggle').addEventListener('click', toggleSidebar);
+  document.getElementById('sidebar-close').addEventListener('click', toggleSidebar);
+}
+
+// ユーザー情報でUIを更新
+function updateUIWithUserData(user) {
+  if (!user) {
+    // ユーザー情報がなければログインページへ
+    window.location.reload();
+    return;
+  }
+  
+  document.getElementById('userInfoId').textContent = user.userId;
+  document.getElementById('userInfoRole').textContent = user.role === 'admin' ? '管理者' : '職員';
+
+  // 権限に応じたメニューを生成
+  generateMenu(user.role);
+}
+
+// javascript.html ファイル内
+
+// メニューを動的に生成
+function generateMenu(role) {
+  const nav = document.getElementById('sidebar-nav');
+  nav.innerHTML = ''; // メニューをクリア
+
+  let menuItems = [];
+
+  if (role === 'admin') {
+    menuItems = [
+      { name: 'シフト作成', id: 'auto-shift' },
+      { name: '変更希望一覧', id: 'change-requests' },
+      { name: 'データ管理', id: 'data-management' },
+      { name: 'ルール設定', id: 'rule-settings' },
+      { name: 'パスワード変更', id: 'change-password' },
+    ];
+  } else { // staff
+    menuItems = [
+      { name: 'シフト表確認', id: 'view-shift' },
+      { name: 'シフト希望提出', id: 'submit-hope' },
+      { name: '勤怠登録（打刻）', id: 'attendance' },
+      { name: '勤怠実績', id: 'attendance-history' },
+      { name: '変更希望提出', id: 'request-change' },
+      { name: 'パスワード変更', id: 'change-password' },
+    ];
+  }
+
+  menuItems.forEach(item => {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.id = 'menu-' + item.id;
+    a.textContent = item.name;
+    a.addEventListener('click', function(e) {
+      e.preventDefault();
+      loadContent(item.id, item.name);
+    });
+    nav.appendChild(a);
+  });
+}
+
+// javascript.html ファイル内
+
+// コンテンツを読み込む
+function loadContent(pageId, pageTitle) {
+  document.getElementById('page-title').textContent = pageTitle;
+  const contentArea = document.getElementById('content-area');
+  
+  contentArea.innerHTML = '<div class="loading-spinner" style="margin: 40px auto;"></div>';
+
+  if (pageId === 'submit-hope') {
+    renderShiftHopeCalendar(contentArea);
+  } else if (pageId === 'view-shift') {
+    renderShiftViewCalendar(contentArea);
+  } else if (pageId === 'auto-shift') {
+    renderAdminShiftCreator(contentArea);
+  } else if (pageId === 'data-management') {
+    renderStaffManagementPage(contentArea);
+  } else if (pageId === 'request-change') {
+    renderChangeRequestForm(contentArea);
+  } else if (pageId === 'change-requests') {
+    renderChangeRequestList(contentArea);
+  } else if (pageId === 'change-password') {
+    renderPasswordChangeForm(contentArea);
+  } else if (pageId === 'rule-settings') {
+    renderRuleSettingsPage(contentArea);
+  } else if (pageId === 'attendance') {
+    renderAttendancePage(contentArea);
+  } else if (pageId === 'attendance-history') {
+    renderAttendanceHistoryPage(contentArea);
+  }
+  else {
+    contentArea.innerHTML = `<h2>${pageTitle}</h2><p>このページ（${pageId}）は現在準備中です。</p>`;
+  }
+  
+  if (window.innerWidth < 768) {
+    document.getElementById('sidebar').classList.remove('show');
+  }
+  
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  navLinks.forEach(link => link.classList.remove('active'));
+  const activeLink = document.getElementById('menu-' + pageId);
+  if(activeLink) {
+    activeLink.classList.add('active');
+  }
+}
+
+
+// --- グローバル変数 ---
+let currentCalendarDate = new Date();
+let clockInterval = null; // デジタル時計の更新を管理するための変数
+
+// 月を変更する
+function changeMonth(direction, type) {
+  currentCalendarDate.setMonth(currentCalendarDate.getMonth() + direction);
+  if (type === 'hope') {
+    generateCalendar(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+  } else if (type === 'view') {
+    generateFixedCalendar(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+  } else if (type === 'admin') {
+    generateAdminShiftTable(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+  }
+}
+
+
+// --- シフト希望提出カレンダー関連 ---
+function renderShiftHopeCalendar(container) {
+  const calendarHtml = `
+    <div class="calendar-container">
+      <div class="calendar-header">
+        <button id="prev-month" class="calendar-nav-button">‹</button>
+        <h2 id="current-month-display"></h2>
+        <button id="next-month" class="calendar-nav-button">›</button>
+      </div>
+      <div id="calendar-grid"></div>
+      <div class="submit-button-container">
+        <button id="submit-hopes-button" class="submit-button">この内容で提出する</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = calendarHtml;
+
+  document.getElementById('prev-month').addEventListener('click', () => changeMonth(-1, 'hope'));
+  document.getElementById('next-month').addEventListener('click', () => changeMonth(1, 'hope'));
+  document.getElementById('submit-hopes-button').addEventListener('click', handleSubmitHopes);
+
+  generateCalendar(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+}
+
+function generateCalendar(year, month) {
+  const grid = document.getElementById('calendar-grid');
+  const monthDisplay = document.getElementById('current-month-display');
+  grid.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  monthDisplay.textContent = `${year}年 ${month + 1}月`;
+  const monthStr = `${year}-${('0' + (month + 1)).slice(-2)}`;
+  google.script.run.withSuccessHandler(hopes => {
+    grid.innerHTML = buildCalendarTable(year, month, hopes);
+  }).getShiftHopeData(monthStr);
+}
+
+function buildCalendarTable(year, month, hopes) {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDayOfWeek = firstDay.getDay();
+  const today = new Date();
+  let html = '<table class="calendar-table"><thead><tr>';
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  weekdays.forEach(day => html += `<th>${day}</th>`);
+  html += '</tr></thead><tbody><tr>';
+  for (let i = 0; i < startDayOfWeek; i++) html += '<td class="other-month"></td>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const currentDate = new Date(year, month, day);
+    const dateStr = `${year}-${('0' + (month + 1)).slice(-2)}-${('0' + day).slice(-2)}`;
+    if (currentDate.getDay() === 0 && day !== 1) html += '</tr><tr>';
+    let classList = (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) ? 'today' : '';
+    html += `<td class="${classList}" data-date="${dateStr}"><span class="day-number">${day}</span><div class="hope-options">`;
+    ['日勤', '夜勤', '休暇'].forEach(type => {
+      const isChecked = hopes.some(h => h.date === dateStr && h.hope === type) ? 'checked' : '';
+      html += `<label><input type="checkbox" name="hope-${dateStr}" value="${type}" ${isChecked}> ${type}</label>`;
+    });
+    html += '</div></div></td>';
+  }
+  for (let i = lastDay.getDay(); i < 6; i++) html += '<td class="other-month"></td>';
+  html += '</tr></tbody></table>';
+  return html;
+}
+
+function handleSubmitHopes() {
+  const button = document.getElementById('submit-hopes-button');
+  button.disabled = true;
+  button.textContent = '提出中...';
+  const monthStr = `${currentCalendarDate.getFullYear()}-${('0' + (currentCalendarDate.getMonth() + 1)).slice(-2)}`;
+  const hopes = [];
+  document.querySelectorAll('.hope-options input[type="checkbox"]:checked').forEach(cb => {
+    const td = cb.closest('td');
+    if (td) hopes.push({ date: td.dataset.date, hope: cb.value });
+  });
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'この内容で提出する';
+    if (response.success) showToast(response.message);
+    else alert('エラー: ' + response.message);
+  }).withFailureHandler(err => {
+    button.disabled = false;
+    button.textContent = 'この内容で提出する';
+    alert('サーバーエラー: ' + err.message);
+  }).saveShiftHopes({ month: monthStr, hopes: hopes });
+}
+
+
+// --- 確定シフト確認カレンダー関連 ---
+function renderShiftViewCalendar(container) {
+  const calendarHtml = `
+    <div class="calendar-container">
+      <div class="calendar-header">
+        <button id="prev-month-view" class="calendar-nav-button">‹</button>
+        <h2 id="current-month-display"></h2>
+        <button id="next-month-view" class="calendar-nav-button">›</button>
+      </div>
+      <div id="calendar-grid"></div>
+    </div>`;
+  container.innerHTML = calendarHtml;
+  document.getElementById('prev-month-view').addEventListener('click', () => changeMonth(-1, 'view'));
+  document.getElementById('next-month-view').addEventListener('click', () => changeMonth(1, 'view'));
+  generateFixedCalendar(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+}
+
+function generateFixedCalendar(year, month) {
+  const grid = document.getElementById('calendar-grid');
+  const monthDisplay = document.getElementById('current-month-display');
+  grid.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  monthDisplay.textContent = `${year}年 ${month + 1}月`;
+  const monthStr = `${year}-${('0' + (month + 1)).slice(-2)}`;
+  google.script.run.withSuccessHandler(shifts => {
+    grid.innerHTML = buildFixedCalendarTable(year, month, shifts);
+  }).getFixedShiftData(monthStr);
+}
+
+function buildFixedCalendarTable(year, month, shifts) {
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  const startDayOfWeek = firstDay.getDay();
+  const today = new Date();
+  let html = '<table class="calendar-table"><thead><tr>';
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  weekdays.forEach(day => html += `<th>${day}</th>`);
+  html += '</tr></thead><tbody><tr>';
+  for (let i = 0; i < startDayOfWeek; i++) html += '<td class="other-month"></td>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const currentDate = new Date(year, month, day);
+    const dateStr = `${year}-${('0' + (month + 1)).slice(-2)}-${('0' + day).slice(-2)}`;
+    if (currentDate.getDay() === 0 && day !== 1) html += '</tr><tr>';
+    let classList = (year === today.getFullYear() && month === today.getMonth() && day === today.getDate()) ? 'today' : '';
+    html += `<td class="${classList}" data-date="${dateStr}"><span class="day-number">${day}</span>`;
+    const shiftData = shifts.find(s => s.date === dateStr);
+    if (shiftData) {
+      let shiftClass = '';
+      if (shiftData.shift === '日勤') shiftClass = 'shift-day';
+      else if (shiftData.shift === '夜勤') shiftClass = 'shift-night';
+      else if (shiftData.shift === '休暇') shiftClass = 'shift-off';
+      html += `<div class="shift-display ${shiftClass}">${shiftData.shift}</div>`;
+    }
+    html += '</td>';
+  }
+  for (let i = lastDay.getDay(); i < 6; i++) html += '<td class="other-month"></td>';
+  html += '</tr></tbody></table>';
+  return html;
+}
+
+// --- 管理者用シフト作成画面関連 ---
+function renderAdminShiftCreator(container) {
+  const adminHtml = `
+    <div class="calendar-container">
+      <div class="calendar-header">
+        <button id="prev-month-admin" class="calendar-nav-button">‹</button>
+        <h2 id="current-month-display"></h2>
+        <button id="next-month-admin" class="calendar-nav-button">›</button>
+      </div>
+      
+      <div class="rules-container">
+        <div class="rule-group">
+          <label for="max-work-days">月間勤務日数:</label>
+          <input type="number" id="max-work-days" value="20" min="0">
+          <span>日以内</span>
+        </div>
+        <div class="rule-group">
+          <label for="required-day">日勤 必要人数:</label>
+          <input type="number" id="required-day" value="5" min="0">
+        </div>
+        <div class="rule-group">
+          <label for="required-night">夜勤 必要人数:</label>
+          <input type="number" id="required-night" value="3" min="0">
+        </div>
+        <button id="auto-generate-button" class="auto-generate-button">シフトを自動作成</button>
+      </div>
+
+      <div id="admin-shift-grid" class="admin-shift-table-wrapper"></div>
+      <div class="submit-button-container">
+        <button id="save-fixed-shifts-button" class="submit-button">この内容でシフトを確定</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = adminHtml;
+  document.getElementById('prev-month-admin').addEventListener('click', () => changeMonth(-1, 'admin'));
+  document.getElementById('next-month-admin').addEventListener('click', () => changeMonth(1, 'admin'));
+  document.getElementById('auto-generate-button').addEventListener('click', handleAutoGenerate);
+  document.getElementById('save-fixed-shifts-button').addEventListener('click', handleSaveFixedShifts);
+  generateAdminShiftTable(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth());
+}
+
+function generateAdminShiftTable(year, month) {
+  const grid = document.getElementById('admin-shift-grid');
+  const monthDisplay = document.getElementById('current-month-display');
+  grid.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  monthDisplay.textContent = `${year}年 ${month + 1}月`;
+  const monthStr = `${year}-${('0' + (month + 1)).slice(-2)}`;
+
+  google.script.run.withSuccessHandler(data => {
+    if (data.error) {
+      grid.innerHTML = `<p class="error-message" style="display:block;">${data.error}</p>`;
+      return;
+    }
+    grid.innerHTML = buildAdminShiftTable(data.staff, data.hopes, data.fixed, year, month);
+  }).getShiftCreationData(monthStr);
+}
+
+function buildAdminShiftTable(staff, hopes, fixed, year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const shiftOptions = ['未設定', '日勤', '夜勤', '休暇'];
+
+  let html = '<table class="admin-shift-table"><thead>';
+  
+  html += '<tr><th>職員</th>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const dayClass = d.getDay() === 0 ? 'day-sun' : d.getDay() === 6 ? 'day-sat' : '';
+    html += `<th class="${dayClass}">${day}<br>${weekdays[d.getDay()]}</th>`;
+  }
+  html += '</tr>';
+  
+  html += '</thead><tbody>';
+
+  staff.forEach(s => {
+    html += `<tr><th>${s.name}<br><small>(${s.userId})</small></th>`;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${('0' + (month + 1)).slice(-2)}-${('0' + day).slice(-2)}`;
+      
+      const hopeDataArray = hopes.filter(h => h.userId === s.userId && h.date === dateStr);
+      const hopeDataText = hopeDataArray.map(h => h.hope).join(', ');
+      const fixedData = fixed.find(f => f.userId === s.userId && f.date === dateStr);
+      
+      let preselectedValue = '未設定';
+      if (fixedData) {
+        preselectedValue = fixedData.shift;
+      } else if (hopeDataArray.length > 0) {
+        const primaryHope = hopeDataArray.find(h => h.hope === '日勤' || h.hope === '夜勤');
+        if (primaryHope) preselectedValue = primaryHope.hope;
+        else preselectedValue = hopeDataArray[0].hope;
+      }
+
+      html += `<td>`;
+      if (hopeDataText) {
+        html += `<div class="hope-display">希望: ${hopeDataText}</div>`;
+      }
+      html += `<select class="shift-select" data-user-id="${s.userId}" data-date="${dateStr}">`;
+      shiftOptions.forEach(opt => {
+        const isSelected = (preselectedValue === opt) ? 'selected' : '';
+        html += `<option value="${opt}" ${isSelected}>${opt}</option>`;
+      });
+      html += `</select></td>`;
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  return html;
+}
+
+function handleSaveFixedShifts() {
+  const button = document.getElementById('save-fixed-shifts-button');
+  button.disabled = true;
+  button.textContent = '保存中...';
+
+  const monthStr = `${currentCalendarDate.getFullYear()}-${('0' + (currentCalendarDate.getMonth() + 1)).slice(-2)}`;
+  const shifts = [];
+  document.querySelectorAll('.shift-select').forEach(select => {
+    if (select.value !== '未設定') {
+      shifts.push({
+        userId: select.dataset.userId,
+        date: select.dataset.date,
+        shift: select.value
+      });
+    }
+  });
+  
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'この内容でシフトを確定';
+    if (response.success) {
+      showToast(response.message);
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).withFailureHandler(err => {
+    button.disabled = false;
+    button.textContent = 'この内容でシフトを確定';
+    alert('サーバーエラー: ' + err.message);
+  }).saveFixedShifts({ month: monthStr, shifts: shifts });
+}
+
+function handleAutoGenerate() {
+  const button = document.getElementById('auto-generate-button');
+  button.disabled = true;
+  button.textContent = '作成中...';
+  
+  const rules = {
+    maxWorkDays: parseInt(document.getElementById('max-work-days').value, 10),
+    requiredDay: parseInt(document.getElementById('required-day').value, 10),
+    requiredNight: parseInt(document.getElementById('required-night').value, 10)
+  };
+  const monthStr = `${currentCalendarDate.getFullYear()}-${('0' + (currentCalendarDate.getMonth() + 1)).slice(-2)}`;
+
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'シフトを自動作成';
+    if (response.success) {
+      updateShiftTable(response.shifts);
+      showToast('シフトの自動作成が完了しました。内容を確認し、確定してください。');
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).withFailureHandler(err => {
+    button.disabled = false;
+    button.textContent = 'シフトを自動作成';
+    alert('サーバーエラー: ' + err.message);
+  }).generateAutomaticShift(monthStr, rules);
+}
+
+function updateShiftTable(shifts) {
+  // まず全てのセレクトボックスを「未設定」にリセット
+  document.querySelectorAll('.shift-select').forEach(select => {
+    select.value = '未設定';
+  });
+  // 生成されたシフトをセレクトボックスに反映
+  shifts.forEach(s => {
+    const select = document.querySelector(`.shift-select[data-user-id="${s.userId}"][data-date="${s.date}"]`);
+    if (select) {
+      select.value = s.shift;
+    }
+  });
+}
+
+// --- 職員データ管理関連 ---
+let allStaffData = []; // 職員データをキャッシュする変数
+
+function renderStaffManagementPage(container) {
+  const pageHtml = `
+    <div class="staff-management-container">
+      <div class="submit-button-container" style="text-align: left; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 10px;">
+        <button id="add-new-staff-btn" class="submit-button">新規職員を追加</button>
+        <button id="download-csv-btn" class="submit-button" style="background-color: var(--primary-color);">CSV一括ダウンロード</button>
+        <button id="upload-csv-btn" class="submit-button" style="background-color: #f59e0b;">CSV一括登録</button>
+        <input type="file" id="csv-upload-input" style="display: none;" accept=".csv">
+        <button id="update-csv-btn" class="submit-button" style="background-color: #10b981;">CSV一括修正</button>
+        <input type="file" id="csv-update-input" style="display: none;" accept=".csv">
+      </div>
+      <div id="staff-table-container"></div>
+    </div>
+    <div id="staff-modal" class="modal-backdrop">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="modal-title">職員情報の編集</h2>
+          <button id="modal-close-btn" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="staff-row-index">
+          <div class="input-group">
+            <label for="staff-id">職員ID</label>
+            <input type="text" id="staff-id">
+          </div>
+          <div class="input-group">
+            <label for="staff-name">氏名</label>
+            <input type="text" id="staff-name">
+          </div>
+          <div class="input-group" id="password-group">
+            <label for="staff-password">初期パスワード</label>
+            <input type="text" id="staff-password" value="1234">
+          </div>
+          <div class="input-group">
+            <label for="staff-work-type">勤務区分</label>
+            <input type="text" id="staff-work-type" placeholder="例: 昼専, 夜専">
+          </div>
+          <div class="input-group">
+            <label for="staff-exclude">相性除外</label>
+            <input type="text" id="staff-exclude" placeholder="例: 職員02">
+          </div>
+          <div class="input-group">
+            <label for="staff-team">チーム</label>
+            <input type="text" id="staff-team" placeholder="例: A">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button id="save-staff-btn" class="submit-button">保存</button>
+        </div>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = pageHtml;
+  
+  // イベントリスナーを設定
+  document.getElementById('add-new-staff-btn').addEventListener('click', () => openStaffModal());
+  document.getElementById('modal-close-btn').addEventListener('click', closeStaffModal);
+  document.getElementById('save-staff-btn').addEventListener('click', handleSaveStaff);
+  document.getElementById('download-csv-btn').addEventListener('click', handleDownloadCsv);
+  document.getElementById('upload-csv-btn').addEventListener('click', () => document.getElementById('csv-upload-input').click());
+  document.getElementById('csv-upload-input').addEventListener('change', handleUploadCsv);
+  document.getElementById('update-csv-btn').addEventListener('click', () => document.getElementById('csv-update-input').click());
+  document.getElementById('csv-update-input').addEventListener('change', handleUpdateCsv);
+  
+  loadStaffData();
+}
+
+function loadStaffData() {
+  const tableContainer = document.getElementById('staff-table-container');
+  tableContainer.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  google.script.run.withSuccessHandler(data => {
+    if (data.error) {
+      tableContainer.innerHTML = `<p class="error-message" style="display:block;">${data.error}</p>`;
+      return;
+    }
+    allStaffData = data.staff;
+    tableContainer.innerHTML = buildStaffTable(allStaffData);
+    
+    // イベントリスナーを再設定
+    document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', (e) => {
+      const userId = e.target.dataset.userId;
+      const staff = allStaffData.find(s => s.userId === userId);
+      if (staff) openStaffModal(staff);
+    }));
+    document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => {
+      handleDeleteStaff(e.target.dataset.userId);
+    }));
+
+  }).getStaffMasterData();
+}
+
+function buildStaffTable(staffList) {
+  let table = '<table class="staff-table"><thead><tr><th>職員ID</th><th>氏名</th><th>役割</th><th>勤務区分</th><th>相性除外</th><th>チーム</th><th>操作</th></tr></thead><tbody>';
+  staffList.forEach((staff, index) => {
+    table += `
+      <tr>
+        <td>${staff.userId}</td>
+        <td>${staff.name}</td>
+        <td>${staff.role}</td>
+        <td>${staff.workType}</td>
+        <td>${staff.exclude}</td>
+        <td>${staff.team}</td>
+        <td class="action-buttons">
+          <button class="edit-btn" data-user-id="${staff.userId}">編集</button>
+          ${staff.role === 'staff' ? `<button class="delete-btn" data-user-id="${staff.userId}">削除</button>` : ''}
+        </td>
+      </tr>
+    `;
+  });
+  table += '</tbody></table>';
+  return table;
+}
+
+function openStaffModal(staff = null) {
+  const modal = document.getElementById('staff-modal');
+  const title = document.getElementById('modal-title');
+  const idInput = document.getElementById('staff-id');
+  const nameInput = document.getElementById('staff-name');
+  const passwordGroup = document.getElementById('password-group');
+  const workTypeInput = document.getElementById('staff-work-type');
+  const excludeInput = document.getElementById('staff-exclude');
+  const teamInput = document.getElementById('staff-team');
+
+  if (staff) { // 編集モード
+    title.textContent = '職員情報の編集';
+    idInput.value = staff.userId;
+    idInput.readOnly = true;
+    nameInput.value = staff.name;
+    workTypeInput.value = staff.workType;
+    excludeInput.value = staff.exclude;
+    teamInput.value = staff.team;
+    passwordGroup.style.display = 'none';
+  } else { // 追加モード
+    title.textContent = '新規職員の追加';
+    idInput.value = '';
+    idInput.readOnly = false;
+    nameInput.value = '';
+    workTypeInput.value = '';
+    excludeInput.value = '';
+    teamInput.value = '';
+    passwordGroup.style.display = 'block';
+  }
+  modal.style.display = 'flex';
+}
+
+function closeStaffModal() {
+  document.getElementById('staff-modal').style.display = 'none';
+}
+
+function handleSaveStaff() {
+  const userId = document.getElementById('staff-id').value;
+  const isNew = !document.getElementById('staff-id').readOnly;
+  
+  const staffData = {
+    userId: userId,
+    name: document.getElementById('staff-name').value,
+    workType: document.getElementById('staff-work-type').value,
+    exclude: document.getElementById('staff-exclude').value,
+    team: document.getElementById('staff-team').value,
+  };
+
+  if (isNew) {
+    staffData.password = document.getElementById('staff-password').value;
+    google.script.run.withSuccessHandler(response => {
+      if (response.success) {
+        showToast(response.message);
+        closeStaffModal();
+        loadStaffData();
+      } else {
+        alert('エラー: ' + response.message);
+      }
+    }).addNewStaff(staffData);
+  } else {
+    google.script.run.withSuccessHandler(response => {
+      if (response.success) {
+        showToast(response.message);
+        closeStaffModal();
+        loadStaffData();
+      } else {
+        alert('エラー: ' + response.message);
+      }
+    }).updateStaffData(staffData);
+  }
+}
+
+function handleDeleteStaff(userId) {
+  if (confirm(`職員ID: ${userId} を本当に削除しますか？この操作は元に戻せません。`)) {
+    google.script.run.withSuccessHandler(response => {
+      if (response.success) {
+        showToast(response.message);
+        loadStaffData();
+      } else {
+        alert('エラー: ' + response.message);
+      }
+    }).deleteStaff(userId);
+  }
+}
+
+function handleDownloadCsv() {
+  google.script.run.withSuccessHandler(file => {
+    if (file.error) {
+      alert('エラー: ' + file.error);
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = `data:${file.mimeType};base64,${file.data}`;
+    a.download = file.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }).getStaffDataAsCsv();
+}
+
+function handleUploadCsv(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const content = e.target.result;
+    google.script.run.withSuccessHandler(response => {
+      alert(response.message); // 結果をアラートで表示
+      if (response.success) {
+        loadStaffData(); // 成功したらテーブルを再読み込み
+      }
+    }).uploadStaffCsv(content);
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // 同じファイルを再度選択できるようにリセット
+}
+
+function handleUpdateCsv(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!confirm('CSVファイルの内容で既存の職員情報を上書きします。よろしいですか？\n（職員IDが一致するデータが更新されます）')) {
+    event.target.value = ''; // Reset file input
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const content = e.target.result;
+    google.script.run.withSuccessHandler(response => {
+      alert(response.message); // Show result in an alert
+      if (response.success) {
+        loadStaffData(); // Reload table on success
+      }
+    }).updateStaffCsv(content);
+  };
+  reader.readAsText(file);
+  event.target.value = ''; // Reset file input
+}
+
+function handleUpdateCsv(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!confirm('CSVファイルの内容で既存の職員情報を上書きします。よろしいですか？\n（職員IDが一致するデータのみが更新対象です）')) {
+    event.target.value = ''; // ファイル選択をリセット
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const content = e.target.result;
+    google.script.run.withSuccessHandler(response => {
+      alert(response.message); // 結果をアラートで表示
+      if (response.success) {
+        loadStaffData(); // 成功したらテーブルを再読み込み
+      }
+    }).withFailureHandler(err => {
+      alert('エラー: ' + err.message);
+    }).updateStaffCsv(content);
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = ''; // 同じファイルを再度選択できるようにリセット
+}
+
+// --- シフト変更希望関連 ---
+function renderChangeRequestForm(container) {
+  const formHtml = `
+    <div class="form-container">
+      <div class="input-group">
+        <label for="request-before">変更前の勤務（日付と勤務体系）</label>
+        <input type="text" id="request-before" placeholder="例: 8/5 日勤">
+      </div>
+      <div class="input-group">
+        <label for="request-after">変更後の勤務（日付と勤務体系）</label>
+        <input type="text" id="request-after" placeholder="例: 8/10 夜勤">
+      </div>
+      <div class="input-group">
+        <label for="request-reason">変更希望理由</label>
+        <textarea id="request-reason"></textarea>
+      </div>
+      <div class="submit-button-container">
+        <button id="submit-request-btn" class="submit-button">希望を提出する</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = formHtml;
+  document.getElementById('submit-request-btn').addEventListener('click', handleSubmitChangeRequest);
+}
+
+function handleSubmitChangeRequest() {
+  const requestData = {
+    before: document.getElementById('request-before').value,
+    after: document.getElementById('request-after').value,
+    reason: document.getElementById('request-reason').value
+  };
+
+  if (!requestData.before || !requestData.after || !requestData.reason) {
+    alert('すべての項目を入力してください。');
+    return;
+  }
+
+  google.script.run.withSuccessHandler(response => {
+    if (response.success) {
+      showToast(response.message);
+      // フォームをクリア
+      document.getElementById('request-before').value = '';
+      document.getElementById('request-after').value = '';
+      document.getElementById('request-reason').value = '';
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).saveChangeRequest(requestData);
+}
+
+function renderChangeRequestList(container) {
+  const listHtml = `
+    <div class="request-list-container">
+      <div id="request-table-container"></div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = listHtml;
+  loadChangeRequests();
+}
+
+function loadChangeRequests() {
+  const tableContainer = document.getElementById('request-table-container');
+  tableContainer.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  google.script.run.withSuccessHandler(data => {
+    if (data.error) {
+      tableContainer.innerHTML = `<p class="error-message" style="display:block;">${data.error}</p>`;
+      return;
+    }
+    tableContainer.innerHTML = buildChangeRequestTable(data.requests);
+    document.querySelectorAll('.update-status-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const requestId = e.target.dataset.id;
+        handleUpdateStatus(requestId, '対応済');
+      });
+    });
+  }).getChangeRequests();
+}
+
+function buildChangeRequestTable(requests) {
+  let table = '<table class="request-table"><thead><tr><th>申請日時</th><th>職員名</th><th>変更前</th><th>変更後</th><th>理由</th><th>ステータス</th><th>操作</th></tr></thead><tbody>';
+  if (requests.length === 0) {
+    return '<p>現在、新しい変更希望はありません。</p>';
+  }
+  requests.forEach(req => {
+    table += `
+      <tr>
+        <td>${req.timestamp}</td>
+        <td>${req.name}</td>
+        <td>${req.before}</td>
+        <td>${req.after}</td>
+        <td>${req.reason}</td>
+        <td>${req.status}</td>
+        <td>
+          ${req.status === '未対応' ? `<button class="update-status-btn edit-btn" data-id="${req.id}">対応済にする</button>` : ''}
+        </td>
+      </tr>
+    `;
+  });
+  table += '</tbody></table>';
+  return table;
+}
+
+function handleUpdateStatus(requestId, status) {
+  google.script.run.withSuccessHandler(response => {
+    if (response.success) {
+      showToast(response.message);
+      loadChangeRequests();
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).updateChangeRequestStatus(requestId, status);
+}
+
+// --- パスワード変更関連 ---
+function renderPasswordChangeForm(container) {
+  const formHtml = `
+    <div class="form-container">
+      <div class="input-group">
+        <label for="current-password">現在のパスワード</label>
+        <input type="password" id="current-password">
+      </div>
+      <div class="input-group">
+        <label for="new-password">新しいパスワード</label>
+        <input type="password" id="new-password">
+      </div>
+      <div class="input-group">
+        <label for="confirm-password">新しいパスワード（確認）</label>
+        <input type="password" id="confirm-password">
+      </div>
+      <div class="submit-button-container">
+        <button id="submit-password-btn" class="submit-button">パスワードを変更する</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = formHtml;
+  document.getElementById('submit-password-btn').addEventListener('click', handleChangePassword);
+}
+
+function handleChangePassword() {
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    alert('すべての項目を入力してください。');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    alert('新しいパスワードと確認用のパスワードが一致しません。');
+    return;
+  }
+  if (newPassword.length < 4) {
+    alert('新しいパスワードは4文字以上で設定してください。');
+    return;
+  }
+
+  const button = document.getElementById('submit-password-btn');
+  button.disabled = true;
+  button.textContent = '変更中...';
+
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'パスワードを変更する';
+    if (response.success) {
+      showToast(response.message);
+      document.getElementById('current-password').value = '';
+      document.getElementById('new-password').value = '';
+      document.getElementById('confirm-password').value = '';
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).withFailureHandler(err => {
+    button.disabled = false;
+    button.textContent = 'パスワードを変更する';
+    alert('サーバーエラー: ' + err.message);
+  }).changePassword(currentPassword, newPassword);
+}
+
+
+// ログアウト処理
+function handleLogout() {
+  google.script.run.withSuccessHandler(function() {
+    window.location.reload();
+  }).logout();
+}
+
+// サイドバーの表示/非表示を切り替え
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('show');
+}
+
+// トースト通知（共通化）
+function showToast(message) {
+  let toast = document.getElementById('toast');
+  if(!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = 'toast-notification';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add('show');
+  setTimeout(() => {
+    toast.classList.remove('show');
+  }, 3000);
+}
+
+// --- ルール設定関連 ---
+function renderRuleSettingsPage(container) {
+  const formHtml = `
+    <div class="form-container">
+      <div class="input-group">
+        <label for="max-consecutive-days">連続勤務日数の上限</label>
+        <input type="number" id="max-consecutive-days" min="1">
+      </div>
+      <div class="submit-button-container">
+        <button id="save-rules-btn" class="submit-button">ルールを保存する</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = formHtml;
+  document.getElementById('save-rules-btn').addEventListener('click', handleSaveRules);
+
+  // 現在の設定値を読み込んで表示
+  google.script.run.withSuccessHandler(response => {
+    if (response.success) {
+      document.getElementById('max-consecutive-days').value = response.settings.maxConsecutiveWorkDays;
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).getRuleSettings();
+}
+
+function handleSaveRules() {
+  const settings = {
+    maxConsecutiveWorkDays: document.getElementById('max-consecutive-days').value
+  };
+
+  const button = document.getElementById('save-rules-btn');
+  button.disabled = true;
+  button.textContent = '保存中...';
+
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'ルールを保存する';
+    if (response.success) {
+      showToast(response.message);
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).saveRuleSettings(settings);
+}
+// --- 勤怠登録（打刻）関連 ---
+function renderAttendancePage(container) {
+  const pageHtml = `
+    <div class="attendance-container">
+      <div id="digital-clock" class="digital-clock">00:00:00</div>
+      <div class="attendance-buttons">
+        <button id="clock-in-btn" class="attendance-button">出勤</button>
+        <button id="clock-out-btn" class="attendance-button">退勤</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = pageHtml;
+
+  // デジタル時計を開始
+  const clockElement = document.getElementById('digital-clock');
+  if (clockInterval) {
+    clearInterval(clockInterval); // 以前の時計が動いていれば停止
+  }
+  clockInterval = setInterval(() => {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    clockElement.textContent = `${hours}:${minutes}:${seconds}`;
+  }, 1000);
+
+  // ボタンにクリックイベントを設定
+  document.getElementById('clock-in-btn').addEventListener('click', () => handleAttendance('出勤'));
+  document.getElementById('clock-out-btn').addEventListener('click', () => handleAttendance('退勤'));
+}
+
+function handleAttendance(type) {
+  const buttonId = type === '出勤' ? 'clock-in-btn' : 'clock-out-btn';
+  const button = document.getElementById(buttonId);
+  button.disabled = true;
+  button.textContent = '打刻中...';
+
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = type;
+    if (response.success) {
+      showToast(response.message);
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).withFailureHandler(err => {
+    button.disabled = false;
+    button.textContent = type;
+    alert('サーバーエラー: ' + err.message);
+  }).recordAttendance(type);
+}
+
+// --- ▼▼▼ 追加 ▼▼▼ ---
+// --- 勤怠実績関連 ---
+function renderAttendanceHistoryPage(container) {
+  const pageHtml = `
+    <div class="history-container">
+      <div id="history-table-container"></div>
+    </div>
+  `;
+  container.innerHTML = pageHtml;
+  loadAttendanceHistory();
+}
+
+function loadAttendanceHistory() {
+  const tableContainer = document.getElementById('history-table-container');
+  tableContainer.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+  google.script.run.withSuccessHandler(response => {
+    if (response.success) {
+      tableContainer.innerHTML = buildAttendanceHistoryTable(response.history);
+    } else {
+      tableContainer.innerHTML = `<p class="error-message" style="display:block;">${response.error}</p>`;
+    }
+  }).getAttendanceHistory();
+}
+
+function buildAttendanceHistoryTable(history) {
+  if (!history || history.length === 0) {
+    return '<p>勤怠記録はありません。</p>';
+  }
+  // ヘッダーを変更
+  let table = '<table class="history-table"><thead><tr><th>出勤日</th><th>出勤時刻</th><th>退勤日時</th><th>勤務時間</th></tr></thead><tbody>';
+  history.forEach(record => {
+    table += `
+      <tr>
+        <td>${record.date}</td>
+        <td>${record.clockInTime}</td>
+        <td>${record.clockOutDisplay}</td>
+        <td>${record.workDuration}</td>
+      </tr>
+    `;
+  });
+  table += '</tbody></table>';
+  return table;
+}
+
+// --- ルール設定関連 ---
+function renderRuleSettingsPage(container) {
+  const formHtml = `
+    <div class="form-container">
+      <div class="input-group">
+        <label for="max-consecutive-days">連続勤務日数の上限</label>
+        <input type="number" id="max-consecutive-days" min="1">
+      </div>
+      <div class="input-group">
+        <label for="required-per-team">各チームの必須人数</label>
+        <input type="number" id="required-per-team" min="0">
+      </div>
+      <div class="submit-button-container">
+        <button id="save-rules-btn" class="submit-button">ルールを保存する</button>
+      </div>
+    </div>
+    <div id="toast" class="toast-notification"></div>
+  `;
+  container.innerHTML = formHtml;
+  document.getElementById('save-rules-btn').addEventListener('click', handleSaveRules);
+
+  // 現在の設定値を読み込んで表示
+  google.script.run.withSuccessHandler(response => {
+    if (response.success) {
+      document.getElementById('max-consecutive-days').value = response.settings.maxConsecutiveWorkDays;
+      document.getElementById('required-per-team').value = response.settings.requiredPerTeam;
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).getRuleSettings();
+}
+
+function handleSaveRules() {
+  const settings = {
+    maxConsecutiveWorkDays: document.getElementById('max-consecutive-days').value,
+    requiredPerTeam: document.getElementById('required-per-team').value
+  };
+
+  const button = document.getElementById('save-rules-btn');
+  button.disabled = true;
+  button.textContent = '保存中...';
+
+  google.script.run.withSuccessHandler(response => {
+    button.disabled = false;
+    button.textContent = 'ルールを保存する';
+    if (response.success) {
+      showToast(response.message);
+    } else {
+      alert('エラー: ' + response.message);
+    }
+  }).saveRuleSettings(settings);
+}
+
+</script>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+  <style>
+    /* ここにCSSを記述するか、外部CSSファイルを読み込む */
+  </style>
+</head>
+<body>
+  <h1>シフト入力フォーム</h1>
+  <form>
+    <input type="text" id="name" placeholder="名前">
+    <input type="date" id="date" placeholder="日付">
+    <button type="button" onclick="sendDataToGas()">シフトを送信</button>
+  </form>
+
+  <script>
+    function sendDataToGas() {
+      const name = document.getElementById('name').value;
+      const date = document.getElementById('date').value;
+      const shiftData = { name: name, date: date };
+
+      // google.script.runを使ってGASの関数を呼び出す
+      google.script.run
+        .withSuccessHandler(function(response) {
+          alert(response); // 成功時のメッセージを表示
+        })
+        .withFailureHandler(function(error) {
+          alert(error.message); // 失敗時のエラーを表示
+        })
+        .saveShiftData(shiftData); // GASのsaveShiftData関数を呼び出す
+    }
+  </script>
+</body>
+</html>

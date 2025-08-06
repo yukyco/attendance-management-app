@@ -1,57 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-  <base target="_top">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
-  <link rel="stylesheet" href="CSS/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GASアプリ</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <h1>シフト入力フォーム</h1>
+    <div class="app-container">
+        <h1>GAS シフト管理アプリ</h1>
+        <p class="subtitle">クリックしてアプリを起動</p>
 
-  <div id="gas-content">
-　  <a href="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec"><img src="img/ui-webapp.jpg"></a>
-  </div>
-    <!--<form id="shift-form">
-  <label for="date">申請日:</label>
-  <input type="date" id="date" name="date" required>
-  <br>
-  <label for="name">申請者名:</label>
-  <input type="text" id="name" name="name" required>
-  <br>
-  <button type="submit">シフトを申請</button>
-</form>
+        <div class="screenshot-button" id="appButton" onclick="openGASApp()">
+            <!-- スクリーンショットがない場合のプレースホルダー 
+            <div class="screenshot-placeholder" id="screenshotPlaceholder">
+                <div>
+                  <img src="img/ui-webapp.jpg" alt="GASアプリのスクリーンショット" class="screenshot-image">
+                </div>
+            </div>-->
+            
+            <!-- 実際のスクリーンショット画像 -->
+            <img src="img/ui-webapp.jpg" alt="GASアプリのスクリーンショット" class="screenshot-image">
+            
+            <div class="play-overlay">
+                <div class="play-icon"></div>
+            </div>
+        </div>
 
-<script>
-document.getElementById('shift-form').addEventListener('submit', function(event) {
-  event.preventDefault();
+        <p class="launch-text">🚀 アプリを起動する</p>
+          <input type="url" id="gasUrl" class="url-input" placeholder="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec" value="https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec">
+            <button class="update-button" onclick="updateURL()">URL更新</button>
+    
+       <div class="instructions">
+            <h3>ログイン方法</h3>
+            <p><strong>1. ログインIDを入力</strong></p>
+            <p><strong>2. パスワードを入力</strong></p>
+        </div>
+    </div>
 
-  const url = 'https://script.google.com/macros/s/AKfycbxso6Jd1jduCq7rLGGfunMZNiroi6dZZre_v1vqMwtS6rzya19NTBAP0LWaX5jEP2rz/exec';
-  
-  const date = document.getElementById('date').value;
-  const name = document.getElementById('name').value;
-  
-  const data = {
-    date: date,
-    name: name
-  };
+    <script>
+        // デフォルトのGAS URL
+        let gasAppUrl = "https://script.google.com/macros/s/AKfycbxy3NlQeZpnpIB9APHxGGk1VbpygGyuaO0s59mHEbHYlV-Vq8h-gbfWhNkSwtWJkwiJ/exec";
 
-  fetch(url, {
-    method: 'POST',
-    body: JSON.stringify(data),
-    headers: {
-      'Content-Type': 'application/json'
-    }
-  })
-  .then(response => response.json())
-  .then(result => {
-    alert(result);
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('申請中にエラーが発生しました。');
-  });
-});
-</script>-->
+        function openGASApp() {
+            if (gasAppUrl) {
+                // 新しいタブでGASアプリを開く
+                window.open(gasAppUrl, '_blank');
+            } else {
+                alert('GASアプリのURLが設定されていません！');
+            }
+        }
 
+        function updateURL() {
+            const urlInput = document.getElementById('gasUrl');
+            const newUrl = urlInput.value.trim();
+            
+            if (newUrl) {
+                gasAppUrl = newUrl;
+                alert('URLが更新されました！ボタンをクリックしてテストしてください。');
+            } else {
+                alert('有効なURLを入力してください。');
+            }
+        }
+
+        // スクリーンショット画像を表示する関数（必要に応じて使用）
+        function showScreenshot(imagePath) {
+            const placeholder = document.getElementById('screenshotPlaceholder');
+            const image = document.getElementById('screenshotImage');
+            
+            if (image) {
+                image.src = imagePath;
+                image.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        }
+
+        // ページ読み込み時にスクリーンショットを表示
+        window.addEventListener('load', function() {
+            showScreenshot('ui-webapp.jpg');
+        });
+
+        // 使用例: showScreenshot('path/to/your/screenshot.png');
+    </script>
 </body>
 </html>
